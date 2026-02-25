@@ -1,5 +1,6 @@
 library(tidyverse)
 library(haven)
+library(ggplot2)
 
 set.seed(2026)
 
@@ -111,3 +112,16 @@ assign_sports_PA <- function(df_A, df_B) {
 
 # Call functions
 synth_data <- assign_sports_PA(synth_data, hse)
+
+# Combine for comparison
+compare_df <- bind_rows(
+  hse %>% select(total_PA, gender, imd, age_group) %>% mutate(source = "HSE (original)"),
+  synth_data %>% select(total_PA, gender, imd, age_group) %>% mutate(source = "Synthetic Population (imputed)")
+)
+
+# Density plot
+ggplot(compare_df, aes(x = total_PA, fill = source)) +
+  geom_density(alpha = 0.4) +
+  labs(title = "Distribution of total_PA: Synthetic Population (imputed) vs HSE (original)",
+       x = "total_PA", y = "Density") +
+  theme_minimal()
