@@ -125,3 +125,14 @@ ggplot(compare_df, aes(x = total_PA, fill = source)) +
   labs(title = "Distribution of total_PA: Synthetic Population (imputed) vs HSE (original)",
        x = "total_PA", y = "Density") +
   theme_minimal()
+
+# Summary statistics
+compare_df %>%
+  group_by(age_group, gender, imd, source) %>%
+  summarise(
+    mean   = mean(total_PA, na.rm = TRUE),
+    median = median(total_PA, na.rm = TRUE),
+    sd     = sd(total_PA, na.rm = TRUE),
+    p25    = quantile(total_PA, 0.25, na.rm = TRUE),
+    p75    = quantile(total_PA, 0.75, na.rm = TRUE)
+  )
