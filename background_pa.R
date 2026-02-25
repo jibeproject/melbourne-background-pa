@@ -74,3 +74,40 @@ hse <- raw_hse |>
       age_group == 6 ~ "65-74",
       age_group == 7 ~ "75+",
       TRUE ~ NA_character_))
+
+
+# Based on age_group, gender and imd levels, sample from df_B to df_A
+assign_sports_PA <- function(df_A, df_B) {
+  df_A <- df_A %>%
+    group_by(age_group, gender, imd) %>%
+    mutate(
+      total_PA = {
+        # Extract group keys as local variables first
+        current_age_group <- unique(age_group)
+        current_gender    <- unique(gender)
+        current_imd       <- unique(imd)
+        
+        matches <- df_B %>%
+          filter(age_group == current_age_group,
+                 gender    == current_gender,
+                 imd       == current_imd) %>%
+          pull(total_PA)
+        
+        if (length(matches) == 0) {
+          warning(paste("No match found for stratum:",
+                        current_age_group, current_gender, current_imd,
+                        "- using global B distribution"))
+          sample(df_B$total_PA, n(), replace = TRUE)
+        } else {
+          sample(matches, n(), replace = TRUE)
+        }
+      },
+      sports_PA = pmax(total_PA - travel_PA, 0)
+    ) %>%
+    ungroup()
+  
+  return(df_A)
+}
+
+# Call functions
+synth_data <- assign_sports_PA(synth_data, hse)
