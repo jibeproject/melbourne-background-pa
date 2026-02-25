@@ -66,6 +66,7 @@ hse <- raw_hse |>
   mutate(
     total_PA = time_totalpa * 4,
     gender = if_else(gender == 2, "Female", "Male"),
+    # Reversing the imd categories where 1 becomes most deprived and 5 becomes least
     imd = 6 - imd,
     age_group = case_when(
       age_group == 1 ~ "16-24",
