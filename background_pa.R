@@ -66,6 +66,7 @@ hse <- raw_hse |>
   mutate(
     total_PA = time_totalpa * 4,
     gender = if_else(gender == 2, "Female", "Male"),
+    imd = 6 - imd,
     age_group = case_when(
       age_group == 1 ~ "16-24",
       age_group == 2 ~ "25-34",
@@ -79,8 +80,8 @@ hse <- raw_hse |>
 
 # Based on age_group, gender and imd levels, sample from df_B to df_A
 assign_sports_PA <- function(df_A, df_B) {
-  df_A <- df_A %>%
-    group_by(age_group, gender, imd) %>%
+  df_A <- df_A |>
+    group_by(age_group, gender, imd) |>
     mutate(
       total_PA = {
         # Extract group keys as local variables first
@@ -88,10 +89,10 @@ assign_sports_PA <- function(df_A, df_B) {
         current_gender    <- unique(gender)
         current_imd       <- unique(imd)
         
-        matches <- df_B %>%
+        matches <- df_B |>
           filter(age_group == current_age_group,
                  gender    == current_gender,
-                 imd       == current_imd) %>%
+                 imd       == current_imd) |>
           pull(total_PA)
         
         if (length(matches) == 0) {
@@ -104,7 +105,7 @@ assign_sports_PA <- function(df_A, df_B) {
         }
       },
       sports_PA = pmax(total_PA - travel_PA, 0)
-    ) %>%
+    ) |>
     ungroup()
   
   return(df_A)
@@ -115,8 +116,8 @@ synth_data <- assign_sports_PA(synth_data, hse)
 
 # Combine for comparison
 compare_df <- bind_rows(
-  hse %>% select(total_PA, gender, imd, age_group) %>% mutate(source = "HSE (original)"),
-  synth_data %>% select(total_PA, gender, imd, age_group) %>% mutate(source = "Synthetic Population (imputed)")
+  hse |> select(total_PA, gender, imd, age_group) |> mutate(source = "HSE (original)"),
+  synth_data |> select(total_PA, gender, imd, age_group) |> mutate(source = "Synthetic Population (imputed)")
 )
 
 # Density plot
@@ -127,8 +128,8 @@ ggplot(compare_df, aes(x = total_PA, fill = source)) +
   theme_minimal()
 
 # Summary statistics
-compare_df %>%
-  group_by(age_group, gender, imd, source) %>%
+compare_df |>
+  group_by(age_group, gender, imd, source) |>
   summarise(
     mean   = mean(total_PA, na.rm = TRUE),
     median = median(total_PA, na.rm = TRUE),
