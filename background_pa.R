@@ -36,6 +36,22 @@ synth_data <- synth_data |> mutate(imd = (imd10 + 1) %/% 2,
                                    travel_PA = mmetHr_cycle + mmetHr_walk,
                                    gender = if_else(gender == 2, "Female", "Male"))
 
+# Assign age groups
+assign_age_group <- function(age) {
+  if (is.na(age)) return(NA)
+  else if (age >= 16 & age <= 24) return("16-24")
+  else if (age >= 25 & age <= 34) return("25-34")
+  else if (age >= 35 & age <= 44) return("35-44")
+  else if (age >= 45 & age <= 54) return("45-54")
+  else if (age >= 55 & age <= 64) return("55-64")
+  else if (age >= 65 & age <= 74) return("65-74")
+  else if (age >= 75) return("75+")
+  else return(NA) # for ages < 16 or missing
+}
+
+# Create age groups
+synth_data$age_group <- sapply(synth_data$age, assign_age_group)
+
 # Collect relevant vars and calculate total_PA from time_totalpa * 4, and add age_group
 hse <- raw_hse |> 
   filter(Age16g5 > 0) |> 
