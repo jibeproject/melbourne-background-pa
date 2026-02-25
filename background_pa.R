@@ -19,6 +19,10 @@ zones    <- readr::read_csv(ZONES_CSV, show_col_types = FALSE)
 # from: cedar-grp-drive/HealthImpact/Data/Country/UK/JIBE/manchester/scenOutput/base_120226/microData/pp_exposure_2021.csv
 synth_data <- read_csv("data/pp_exposure_2021.csv")
 
+# Read in the HSE survey data
+# from: cedar-grp-drive/Marina/physicalActivity/Health for England Survey/hse16_eul_v5.dta
+raw_hse <- read_dta("data/hse16_eul_v5.dta")
+
 # Rename var
 synth_data <- synth_data |> rename(oaID = zone)
 
@@ -31,3 +35,26 @@ synth_data <- add_imd(synth_data, zones)
 synth_data <- synth_data |> mutate(imd = (imd10 + 1) %/% 2,
                                    travel_PA = mmetHr_cycle + mmetHr_walk,
                                    gender = if_else(gender == 2, "Female", "Male"))
+
+# Collect relevant vars and calculate total_PA from time_totalpa * 4, and add age_group
+hse <- raw_hse |> 
+  filter(Age16g5 > 0) |> 
+  rowwise() |>
+  select(id = SerialA,
+         gender = Sex,
+         age_group = ag16g10,
+         time_totalpa = hrs10tot08,
+         imd = qimd) |> 
+  filter(age_group > 0 & time_totalpa >= 0) |> 
+  mutate(
+    total_PA = time_totalpa * 4,
+    gender = if_else(gender == 2, "Female", "Male"),
+    age_group = case_when(
+      age_group == 1 ~ "16-24",
+      age_group == 2 ~ "25-34",
+      age_group == 3 ~ "35-44",
+      age_group == 4 ~ "45-54",
+      age_group == 5 ~ "55-64",
+      age_group == 6 ~ "65-74",
+      age_group == 7 ~ "75+",
+      TRUE ~ NA_character_))
