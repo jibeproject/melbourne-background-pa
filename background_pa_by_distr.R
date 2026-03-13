@@ -1,4 +1,5 @@
 library(tidyverse)
+library(rlang)
 library(haven)
 library(ggplot2)
 
@@ -12,26 +13,14 @@ add_imd <- function(df, zones) {
 }
 
 # Read zones that contain IMD10
-ZONES_CSV  <- "data/zoneSystem.csv"
+ZONES_CSV  <- "/media/ali/Expansion/backup_tabea/Ali/manchester/input/zoneSystem.csv"
 zones    <- readr::read_csv(ZONES_CSV, show_col_types = FALSE)
 
 # Read in the inputs baseline synthetic data
 # from: cedar-grp-drive/HealthImpact/Data/Country/UK/JIBE/manchester/scenOutput/base_120226/microData/pp_exposure_2021.csv
 # Z:/HealthImpact/Data/Country/UK/JIBE/manchester/input/health/pp_exposure_2021_base_161025.csv
-synth_data <- read_csv("data/pp_exposure_2021_base_161025.csv")
-
-# Rename var
-synth_data <- synth_data |> rename(oaID = zone)
-
-# Add imd10 to each OA
-synth_data <- add_imd(synth_data, zones)
-
-# Recategorise imd10 to imd with 5 categories
-# Calculate travel PA
-# Recategorise numeric gender to string
-synth_data <- synth_data |> mutate(imd = (imd10 + 1) %/% 2,
-                                   travel_PA = mmetHr_cycle + mmetHr_walk,
-                                   gender = if_else(gender == 2, "Female", "Male"))
+synth_data_ref <- read_csv("/media/ali/Expansion/backup_tabea/Ali/manchester/input/health/pp_exposure_2021_base_161025.csv") #scenOutput/base/microData/pp_exposure_2021.csv")
+synth_data_gd <- read_csv("/home/ali/Downloads/pp_exposure_2021_newGoDutch.csv")
 
 # Assign age groups
 assign_age_group <- function(age) {
@@ -45,9 +34,6 @@ assign_age_group <- function(age) {
   else if (age >= 75) return("75+")
   else return(NA) # for ages < 16 or missing
 }
-
-# Create age groups
-synth_data$age_group <- sapply(synth_data$age, assign_age_group)
 
 # Collect relevant vars and calculate total_PA from time_totalpa * 4, and add age_group
 hse <- read_csv("data/processed_hse.csv")
@@ -111,14 +97,107 @@ assign_sports_PA <- function(df_A, df_B) {
   return(df_A)
 }
 
+
+add_missing_var <- function(synth_data, zones){
+  
+  # Rename var
+  synth_data <- synth_data |> rename(oaID = zone)
+  
+  # Add imd10 to each OA
+  synth_data <- add_imd(synth_data, zones)
+  
+  # Recategorise imd10 to imd with 5 categories
+  # Calculate travel PA
+  # Recategorise numeric gender to string
+  synth_data <- synth_data |> mutate(imd = (imd10 + 1) %/% 2,
+                                     travel_PA = mmetHr_cycle + mmetHr_walk,
+                                     gender = if_else(gender == 2, "Female", "Male"))
+  
+  # Create age groups
+  synth_data$age_group <- sapply(synth_data$age, assign_age_group)
+  
+  return(synth_data)
+}
+
+synth_data_gd <- add_missing_var(synth_data_gd, zones)
+synth_data_ref <- add_missing_var(synth_data_ref, zones)
+
 # Call functions
-synth_data2 <- assign_sports_PA(synth_data, hse)
+synth_data2_ref <- assign_sports_PA(synth_data_ref, hse)
+synth_data2_gd <- assign_sports_PA(synth_data_gd, hse) #|> mutate(total_PA = mmetHr_walk + mmetHr_cycle + mmetHr_otherSport)#assign_sports_PA(synth_data, hse)
 
 # Combine for comparison
 compare_df <- bind_rows(
   hse |> select(total_PA, gender, imd, age_group) |> mutate(source = "HSE (original)"),
-  synth_data2 |> select(total_PA, gender, imd, age_group) |> mutate(source = "Synthetic Population (imputed)")
+  synth_data2_ref |> select(total_PA, travel_PA, sports_PA, gender, imd, age_group) |> mutate(source = "Reference Synthetic Population"),
+  synth_data2_gd |> select(total_PA, travel_PA, sports_PA, gender, imd, age_group) |> mutate(source = "Go Dutch Synthetic Population")
 )
+
+# get_summary <- function(compare_df, group_var = c("source"), var_name = "total_PA"){
+#   
+#   if (!is.null(group_var)) {
+#     group_vars_sym <- if (length(group_var) > 1) {
+#       rlang::syms(group_var)
+#     } else {
+#       rlang::sym(group_var)
+#     }
+#     grouped_df <- compare_df |> group_by(!!!group_vars_sym)
+#   } else {
+#     grouped_df <- compare_df
+#   }
+#   
+#   return(compare_df |> 
+#            summarise(
+#              mean   = mean(!!var_name, na.rm = TRUE),
+#              median = median(!!var_name, na.rm = TRUE),
+#              sd     = sd(!!var_name, na.rm = TRUE),
+#              p25    = quantile(!!var_name, 0.25, na.rm = TRUE),
+#              p75    = quantile(!!var_name, 0.75, na.rm = TRUE)
+#              
+#            )
+#          
+#          )
+# 
+# }
+
+
+get_summary <- function(compare_df,
+                        group_var = c("source"),
+                        var_name = "total_PA") {
+  
+  # Turn group_var character(s) into symbols for !!!
+  if (!is.null(group_var)) {
+    group_vars_sym <- syms(group_var)
+    grouped_df <- compare_df %>% group_by(!!!group_vars_sym)
+  } else {
+    grouped_df <- compare_df
+  }
+  
+  # Turn var_name character into a symbol for !!
+  var_sym <- sym(var_name)
+  
+  grouped_df %>%
+    summarise(
+      mean   = mean(!!var_sym, na.rm = TRUE),
+      median = median(!!var_sym, na.rm = TRUE),
+      sd     = sd(!!var_sym, na.rm = TRUE),
+      p25    = quantile(!!var_sym, 0.25, na.rm = TRUE),
+      p75    = quantile(!!var_sym, 0.75, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+
+
+compare_df |>
+  group_by(source) |>
+  summarise(
+    mean   = mean(total_PA, na.rm = TRUE),
+    median = median(total_PA, na.rm = TRUE),
+    sd     = sd(total_PA, na.rm = TRUE),
+    p25    = quantile(total_PA, 0.25, na.rm = TRUE),
+    p75    = quantile(total_PA, 0.75, na.rm = TRUE)
+  ) 
+
 
 compare_df |>
   group_by(source) |>
@@ -146,4 +225,4 @@ compare_df |>
     sd     = sd(total_PA, na.rm = TRUE),
     p25    = quantile(total_PA, 0.25, na.rm = TRUE),
     p75    = quantile(total_PA, 0.75, na.rm = TRUE)
-  ) #|> write_csv("grouped_dist_total_pa.csv")
+  ) |> View()#write_csv("grouped_dist_total_pa.csv")
