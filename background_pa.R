@@ -18,7 +18,13 @@ zones    <- readr::read_csv(ZONES_CSV, show_col_types = FALSE)
 
 # Read in the inputs baseline synthetic data
 # from: cedar-grp-drive/HealthImpact/Data/Country/UK/JIBE/manchester/scenOutput/base_120226/microData/pp_exposure_2021.csv
-synth_data <- read_csv("data/pp_exposure_2021.csv")
+#synth_data <- read_csv("data/pp_exposure_2021.csv")
+
+#synth_data <- read_csv("/media/ali/Expansion/backup_tabea/Ali/manchester/scenOutput/base/microData/pp_exposure_2021.csv")
+
+synth_data <- read_csv("/media/ali/Expansion/backup_tabea/Ali/manchester/scenOutput/base/microData/pp_exposure_2021.csv")
+#synth_data <- read_csv("/media/ali/Expansion/backup_tabea/Ali/manchester/input/health/pp_exposure_2021_base_161025.csv")
+
 
 # Read in the HSE survey data
 # from: cedar-grp-drive/Marina/physicalActivity/Health for England Survey/hse16_eul_v5.dta
@@ -53,38 +59,23 @@ assign_age_group <- function(age) {
 # Create age groups
 synth_data$age_group <- sapply(synth_data$age, assign_age_group)
 
-# Collect relevant vars and calculate total_PA from time_totalpa * 4, and add age_group
-hse <- raw_hse |> 
-  filter(Age16g5 > 0) |> 
-  rowwise() |>
-  select(id = SerialA,
-         gender = Sex,
-         age_group = ag16g10,
-         time_totalpa = hrs10tot08,
-         imd = qimd) |> 
-  filter(age_group > 0 & time_totalpa >= 0) |> 
-  mutate(
-    total_PA = time_totalpa * 4,
-    gender = if_else(gender == 2, "Female", "Male"),
-    # Reversing the imd categories where 1 becomes most deprived and 5 becomes least
-    imd = 6 - imd,
-    age_group = case_when(
-      age_group == 1 ~ "16-24",
-      age_group == 2 ~ "25-34",
-      age_group == 3 ~ "35-44",
-      age_group == 4 ~ "45-54",
-      age_group == 5 ~ "55-64",
-      age_group == 6 ~ "65-74",
-      age_group == 7 ~ "75+",
-      TRUE ~ NA_character_))
+synth_data |> 
+  filter(age_group == "16-24", gender == "Female", imd == 1) |> 
+  mutate(traval_PA = mmetHr_walk + mmetHr_cycle, 
+         total_PA = travel_PA + mmetHr_otherSport) |> 
+  group_by(age_group, gender, imd) |> 
+  reframe(med_total_pa = median(total_PA), 
+          med_travel_pa = median(travel_PA), 
+          med_sports_pa = med_total_pa - med_travel_pa)
 
+hse <- read_csv("data/processed_hse.csv")
 
 # Based on age_group, gender and imd levels, sample from df_B to df_A
 assign_sports_PA <- function(df_A, df_B) {
   df_A <- df_A |>
     group_by(age_group, gender, imd) |>
     mutate(
-      total_PA = {
+      mmetHr_sport_manual = {
         # Extract group keys as local variables first
         current_age_group <- unique(age_group)
         current_gender    <- unique(gender)
@@ -94,47 +85,68 @@ assign_sports_PA <- function(df_A, df_B) {
           filter(age_group == current_age_group,
                  gender    == current_gender,
                  imd       == current_imd) |>
-          pull(total_PA)
+          pull(mmetHr_sport_manual)
         
         if (length(matches) == 0) {
           warning(paste("No match found for stratum:",
                         current_age_group, current_gender, current_imd,
                         "- using global B distribution"))
-          sample(df_B$total_PA, n(), replace = TRUE)
+          sample(df_B$mmetHr_sport_manual, n(), replace = TRUE)
         } else {
           sample(matches, n(), replace = TRUE)
         }
-      },
-      sports_PA = pmax(total_PA - travel_PA, 0)
+      }
     ) |>
     ungroup()
   
   return(df_A)
 }
 
+
 # Call functions
 synth_data <- assign_sports_PA(synth_data, hse)
 
 # Combine for comparison
 compare_df <- bind_rows(
-  hse |> select(total_PA, gender, imd, age_group) |> mutate(source = "HSE (original)"),
-  synth_data |> select(total_PA, gender, imd, age_group) |> mutate(source = "Synthetic Population (imputed)")
+  hse |> select(mmetHr_sport_manual, gender, imd, age_group) |> mutate(source = "HSE (original)"),
+  synth_data |> select(mmetHr_sport_manual, gender, imd, age_group) |> mutate(source = "Synthetic Population (imputed)")
 )
 
 # Density plot
-ggplot(compare_df, aes(x = total_PA, fill = source)) +
+ggplot(compare_df, aes(x = mmetHr_sport_manual, fill = source)) +
   geom_density(alpha = 0.4) +
-  labs(title = "Distribution of total_PA: Synthetic Population (imputed) vs HSE (original)",
-       x = "total_PA", y = "Density") +
+  labs(title = "Distribution of mmetHr_sport_manual: Synthetic Population (imputed) vs HSE (original)",
+       x = "mmetHr_sport_manual", y = "Density") +
   theme_minimal()
 
 # Summary statistics
 compare_df |>
   group_by(age_group, gender, imd, source) |>
   summarise(
-    mean   = mean(total_PA, na.rm = TRUE),
-    median = median(total_PA, na.rm = TRUE),
-    sd     = sd(total_PA, na.rm = TRUE),
-    p25    = quantile(total_PA, 0.25, na.rm = TRUE),
-    p75    = quantile(total_PA, 0.75, na.rm = TRUE)
-  )
+    mean   = mean(mmetHr_sport_manual, na.rm = TRUE),
+    `12.5th` = quantile(mmetHr_sport_manual, 0.125),
+    `25th.` = quantile(mmetHr_sport_manual, 0.25),
+    `37.5th.` = quantile(mmetHr_sport_manual, 0.375),
+    `50th` = quantile(mmetHr_sport_manual, 0.5),
+    `75th.` = quantile(mmetHr_sport_manual, 0.75)
+  ) |> View()
+
+# Combine for comparison
+synth_df_summary <- bind_rows(
+  synth_data |> 
+    mutate(total_pa = travel_PA + mmetHr_sport_manual) |> 
+    select(total_pa, gender, imd, age_group) |> 
+    mutate(source = "Synthetic Population (imputed)")
+)
+
+# Summary statistics
+synth_df_summary |>
+  group_by(age_group, gender, imd, source) |>
+  summarise(
+    mean   = mean(total_pa, na.rm = TRUE),
+    `12.5th` = quantile(total_pa, 0.125),
+    `25th.` = quantile(total_pa, 0.25),
+    `37.5th.` = quantile(total_pa, 0.375),
+    `50th` = quantile(total_pa, 0.5),
+    `75th.` = quantile(total_pa, 0.75)
+  ) |> View()
