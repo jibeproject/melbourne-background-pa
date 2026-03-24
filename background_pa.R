@@ -136,7 +136,7 @@ synth_df_summary <- bind_rows(
   synth_data |> 
     mutate(total_pa = travel_PA + mmetHr_sport_manual) |> 
     select(total_pa, gender, imd, age_group) |> 
-    mutate(source = "Synthetic Population (imputed)")
+    mutate(source = "JIBE Total PA (travel + sports + manual)")
 )
 
 # Summary statistics
