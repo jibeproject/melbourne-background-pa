@@ -59,14 +59,14 @@ assign_age_group <- function(age) {
 # Create age groups
 synth_data$age_group <- sapply(synth_data$age, assign_age_group)
 
-synth_data |> 
-  filter(age_group == "16-24", gender == "Female", imd == 1) |> 
-  mutate(traval_PA = mmetHr_walk + mmetHr_cycle, 
-         total_PA = travel_PA + mmetHr_otherSport) |> 
-  group_by(age_group, gender, imd) |> 
-  reframe(med_total_pa = median(total_PA), 
-          med_travel_pa = median(travel_PA), 
-          med_sports_pa = med_total_pa - med_travel_pa)
+# synth_data |> 
+#   filter(age_group == "16-24", gender == "Female", imd == 1) |> 
+#   mutate(traval_PA = mmetHr_walk + mmetHr_cycle, 
+#          total_PA = travel_PA + mmetHr_otherSport) |> 
+#   group_by(age_group, gender, imd) |> 
+#   reframe(med_total_pa = median(total_PA), 
+#           med_travel_pa = median(travel_PA), 
+#           med_sports_pa = med_total_pa - med_travel_pa)
 
 hse <- read_csv("data/processed_hse.csv")
 
@@ -108,8 +108,8 @@ synth_data <- assign_sports_PA(synth_data, hse)
 
 # Combine for comparison
 compare_df <- bind_rows(
-  hse |> select(mmetHr_sport_manual, gender, imd, age_group) |> mutate(source = "HSE (original)"),
-  synth_data |> select(mmetHr_sport_manual, gender, imd, age_group) |> mutate(source = "Synthetic Population (imputed)")
+  hse |> select(mmetHr_sport_manual, gender, imd, age_group) |> mutate(source = "HSE (sports + manual)"),
+  synth_data |> select(mmetHr_sport_manual, gender, imd, age_group) |> mutate(source = "JIBE (sports + manual)")
 )
 
 # Density plot
