@@ -36,7 +36,7 @@ sp <- sp %>%
 # Epidemiology and Public Health. (2024). Health Survey for England. [data series]. 
 # 8th Release. UK Data Service. SN: 2000021,DOI: http://doi.org/10.5255/UKDA-Series-2000021
 
-raw_hse <- read_dta("./data/physicalactivity/hse16_eul_v5.dta")
+raw_hse <- read_dta("~/manchester/data/physicalactivity/hse16_eul_v5.dta")
 
 
 ```
@@ -214,7 +214,7 @@ combine_activities <- function(data, vars, labels, group_var = NULL,
 ```
 
 
-```{r hse and matching, include = TRUE}
+```{r hse and matching, include = FALSE}
 
 # Table 1: HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by Age and Gender
 
@@ -240,33 +240,17 @@ hse_summary_age_gender <- combine_activities(
   digits    = 2
 )
 
-
 # by Age and Gender
 gender_age_summary <- dplyr::bind_rows(hse_summary_age_gender, jibe_summary_age_gender) %>%
   dplyr::arrange(gender, age_group, Value)
 
-gender_age_summary %>%
-  dplyr::select(-gender, -age_group) %>%
-  knitr::kable(caption = "HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by Age and Gender") %>%
-  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
-                            full_width = FALSE) %>%
-  kableExtra::pack_rows(index = table(paste(gender_age_summary$gender,
-                                            gender_age_summary$age_group, sep = " | ")))
-
 # Summary by gender only
-gender_summary <- dplyr::bind_rows(jibe_summary, hse_summary) %>%
+gender_summary <- dplyr::bind_rows(jibe_summary_age_gender, hse_summary_age_gender) %>%
   dplyr::group_by(gender, Value) %>%
   dplyr::summarise(dplyr::across(where(is.numeric), ~ round(mean(.x), 2)), .groups = "drop") %>%
   dplyr::arrange(gender, Value)
 
-gender_summary %>%
-  dplyr::select(-gender) %>%
-  knitr::kable(caption = "HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by Age and Gender") %>%
-  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
-                            full_width = FALSE) %>%
-  kableExtra::pack_rows(index = table(gender_summary$gender))
-
-# Table 2: HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by IMD
+# Table 3: HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by IMD
 
 jibe_summary_imd <- combine_activities(
   data      = sp_health_matched,
@@ -289,19 +273,44 @@ imd_summary <- dplyr::bind_rows(jibe_summary_imd, hse_summary_imd) %>%
   dplyr::summarise(dplyr::across(where(is.numeric), ~ round(mean(.x), 2)), .groups = "drop") %>%
   dplyr::arrange(imd, Value)
 
-imd_summary %>%
+table1 <- gender_age_summary %>%
+  dplyr::select(-gender, -age_group) %>%
+  knitr::kable(caption = "Table 1: HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by Age and Gender") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                            full_width = FALSE) %>%
+  kableExtra::pack_rows(index = table(paste(gender_age_summary$gender,
+                                            gender_age_summary$age_group, sep = " | ")))
+
+table2 <- gender_summary %>%
+  dplyr::select(-gender) %>%
+  knitr::kable(caption = "Table 2: HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by Gender") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                            full_width = FALSE) %>%
+  kableExtra::pack_rows(index = table(gender_summary$gender))
+
+table3 <- imd_summary %>%
   dplyr::select(-imd) %>%
-  knitr::kable(caption = "HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by IMD") %>%
+  knitr::kable(caption = "Table 3: HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by IMD") %>%
   kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
                             full_width = FALSE) %>%
   kableExtra::pack_rows(index = table(imd_summary$imd))
 
 ```
 
+```{r hse and matching tables, include = TRUE, echo = FALSE}
 
-``` {r active travel only, include = TRUE}
+table1
 
-# Table 3: HSE Active Travel vs JIBE Active Travel by Gender
+table2
+
+table3
+
+```
+
+
+``` {r active travel only, include = FALSE}
+
+# Table 4: HSE Active Travel vs JIBE Active Travel by Gender
 
 jibe_at_age_gender <- combine_activities(
   data      = sp_health_matched,
@@ -325,14 +334,8 @@ at_gender_summary <- dplyr::bind_rows(hse_at_age_gender, jibe_at_age_gender) %>%
   dplyr::summarise(dplyr::across(where(is.numeric), ~ round(mean(.x), 2)), .groups = "drop") %>%
   dplyr::arrange(gender, Value)
 
-at_gender_summary %>%
-  dplyr::select(-gender) %>%
-  knitr::kable(caption = "HSE Active Travel vs JIBE Active Travel by Gender") %>%
-  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
-                            full_width = FALSE) %>%
-  kableExtra::pack_rows(index = table(at_gender_summary$gender))
 
-# Table 4:  HSE Active Travel vs JIBE Active Travel by IMD
+# Table 5:  HSE Active Travel vs JIBE Active Travel by IMD
 
 jibe_at_imd <- combine_activities(
   data      = sp_health_matched,
@@ -357,9 +360,16 @@ at_imd_summary <- dplyr::bind_rows(hse_at_imd, jibe_at_imd) %>%
   dplyr::summarise(dplyr::across(where(is.numeric), ~ round(mean(.x), 2)), .groups = "drop") %>%
   dplyr::arrange(imd, Value)
 
-at_imd_summary %>%
+table4 <- at_gender_summary %>%
+  dplyr::select(-gender) %>%
+  knitr::kable(caption = "Table 4: HSE Active Travel vs JIBE Active Travel by Gender") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                            full_width = FALSE) %>%
+  kableExtra::pack_rows(index = table(at_gender_summary$gender))
+
+table5 <- at_imd_summary %>%
   dplyr::select(-imd) %>%
-  knitr::kable(caption = "HSE Active Travel vs JIBE Active Travel by IMD") %>%
+  knitr::kable(caption = "Table 5: HSE Active Travel vs JIBE Active Travel by IMD") %>%
   kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
                             full_width = FALSE) %>%
   kableExtra::pack_rows(index = table(at_imd_summary$imd))
@@ -367,7 +377,14 @@ at_imd_summary %>%
 
 ```
 
-```{r meta analysis, include = TRUE}
+```{r more tables, include = TRUE, echo = FALSE}
+table4
+
+table5
+
+```
+
+```{r meta analysis, include = FALSE}
 
 # Table 5: HSE Sports + Home + Manual + JIBE AT vs HSE Total PA vs Meta Analysis by Gender
 
@@ -410,11 +427,17 @@ summary <- rbind(meta_data, summary_hse_totalpa, summary_jibe_sports_manual_home
   dplyr::summarise(dplyr::across(where(is.numeric), ~ round(mean(.x), 2)), .groups = "drop") %>%
   dplyr::arrange(gender, Source)
 
-summary %>%
+table6 <- summary %>%
   dplyr::select(-gender) %>%
-  knitr::kable(caption = "HSE Sports + Home + Manual + JIBE AT vs HSE Total PA vs Meta Analysis by Gender") %>%
+  knitr::kable(caption = "Table 6: HSE Sports + Home + Manual + JIBE AT vs HSE Total PA vs Meta Analysis by Gender") %>%
   kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
                             full_width = FALSE) %>%
   kableExtra::pack_rows(index = table(summary$gender))
+
+```
+
+```{r last table, include = TRUE, echo = FALSE}
+
+table6
 
 ```
