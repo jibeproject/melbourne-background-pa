@@ -1,0 +1,420 @@
+---
+title: "Physical Activity Matching"
+author: "Marina Berdikhanova"
+date: "2026-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#rm(list = ls())
+
+library(tidyverse)
+library (haven)
+library(kableExtra)
+
+set.seed(42)
+```
+
+```{r data loading, include=FALSE}
+
+
+# Synthetic population data 
+
+sp <- read_csv("~/physical activity/pp_exposure_2021.csv")
+
+synpop <- read_csv("~/manchester/data/physicalactivity/pp_health_2021_withOtherSport.csv")
+
+sp <- sp %>% 
+  left_join(synpop %>% 
+              select(id,imd10),
+            by = "id")
+
+# Health for England Survey 2016
+# [Source]: NatCen Social Research, University College London, Department of 
+# Epidemiology and Public Health. (2024). Health Survey for England. [data series]. 
+# 8th Release. UK Data Service. SN: 2000021,DOI: http://doi.org/10.5255/UKDA-Series-2000021
+
+raw_hse <- read_dta("./data/physicalactivity/hse16_eul_v5.dta")
+
+
+```
+
+```{r data processing, include=FALSE}
+
+############################### PROCESS DATA ###################################
+
+hse <- raw_hse %>%
+  filter(Age16g5 > 0) %>% 
+  mutate(mmetHr_swimming = ifelse(DayExc01 >= 1 & DayExc01 <= 28 & ExcTim01 > 0, (DayExc01 * ExcTim01) / 240, 0)*ifelse(ag16g10<6,5.8,4.8),
+         mmetHr_workingout = ifelse(DayExc03 >= 1 & DayExc03 <= 28 & ExcTim03 > 0, (DayExc03 * ExcTim03) / 240, 0)*ifelse(ag16g10<6,5,4),
+         mmetHr_aerobics = ifelse(DayExc04 >= 1 & DayExc04 <= 28 & ExcTim04 > 0, (DayExc04 * ExcTim04) / 240, 0)*ifelse(ag16g10<6,7.3,6.3),
+         mmetHr_dance = ifelse(DayExc05 >= 1 & DayExc05 <= 28 & ExcTim05 > 0, (DayExc05 * ExcTim05) / 240, 0)*ifelse(ag16g10<6,5,4),
+         mmetHr_running = ifelse(DayExc06 >= 1 & DayExc06 <= 28 & ExcTim06 > 0, (DayExc06 * ExcTim06) / 240, 0)*ifelse(ag16g10<6,7.5,6.5),
+         mmetHr_football = ifelse(DayExc07 >= 1 & DayExc07 <= 28 & ExcTim07 > 0, (DayExc07 * ExcTim07) / 240, 0)*ifelse(ag16g10<6,6.3,5.3),
+         mmetHr_badminton = ifelse(DayExc08 >= 1 & DayExc08 <= 28 & ExcTim08 > 0, (DayExc08 * ExcTim08) / 240, 0)*ifelse(ag16g10<6,6.8,5.8),
+         mmetHr_squash = ifelse(DayExc09 >= 1 & DayExc09 <= 28 & ExcTim09 > 0, (DayExc09 * ExcTim09) / 240, 0)*ifelse(ag16g10<6,7.3,6.3),
+         mmetHr_exercises = ifelse(DayExc10 >= 1 & DayExc10 <= 28 & ExcTim10 > 0, (DayExc10 * ExcTim10) / 240, 0)*ifelse(ag16g10<6,4.5,3.5),
+         mmetHr_sports = pmin(mmetHr_swimming+mmetHr_workingout+mmetHr_aerobics+mmetHr_dance+mmetHr_running+mmetHr_football+mmetHr_badminton+mmetHr_squash+mmetHr_exercises,240),
+         time_cycling = pmin(ifelse(DayExc02 >= 1 & DayExc02 <= 28 & ExcTim02 > 0, (DayExc02 * ExcTim02) / 240, 0)),40) %>% 
+  select(id = SerialA,
+         gender = Sex,
+         age_group = ag16g10,
+         time_sports = hrs10spt,
+         time_totalpa = hrs10tot08,
+         mmetHr_sports,
+         imd_original = qimd,
+         time_manual = hrs10man,
+         time_walk = hrs10wlka,
+         time_home = hrs10hwk,
+         time_cycling) %>% 
+  filter(age_group > 0 & time_totalpa >= 0) %>% 
+  mutate(#
+    time_manual = pmin(time_manual, 40),
+    time_walk = pmin(time_walk, 40),
+    time_home = pmin(time_home, 40),
+    time_sport_without_cycling = time_sports - time_cycling,
+    mmetHr_totalpa = time_totalpa * 4,
+    manual_met = case_when(age_group < 6 ~ 4, 
+                           age_group == 6 ~ 3,
+                           age_group == 7 ~ 2, 
+                           TRUE ~ NA), 
+    mmetHr_walk = time_walk*2.5,
+    mmetHr_home = time_home*2,
+    mmetHr_cycling = time_cycling*5.8,
+    mmetHr_manual = time_manual*manual_met,
+    mmetHr_sport_manual = pmin(mmetHr_sports+mmetHr_manual, 240),
+    mmetHr_sport_manual_home = pmin(mmetHr_sports+mmetHr_manual+mmetHr_home, 240),
+    mmetHr_totalpa_derived = pmin(mmetHr_sports+mmetHr_cycling+mmetHr_walk+mmetHr_home+mmetHr_manual, 240),
+    time_totalpa_derived = pmin(time_sport_without_cycling+time_cycling+time_walk+time_home+time_manual, 60),
+    gender = if_else(gender == 2, "Female", "Male"),
+    age_group = case_when(
+      age_group == 1 ~ "16-24",
+      age_group == 2 ~ "25-34",
+      age_group == 3 ~ "35-44",
+      age_group == 4 ~ "45-54",
+      age_group == 5 ~ "55-64",
+      age_group == 6 ~ "65-74",
+      age_group == 7 ~ "75+",
+      TRUE ~ NA_character_),
+    imd = case_when(imd_original == 1 ~ "5 - Least Deprived", # least deprived
+                    imd_original == 2 ~ "4",
+                    imd_original == 3 ~ "3",
+                    imd_original == 4 ~ "2",
+                    imd_original == 5 ~ "1 - Most Deprived"))# most deprived
+
+# Synthetic Population Data Processing
+
+sp_health <- sp %>% 
+  mutate(age_group = case_when(
+    age >= 16 & age < 25 ~ "16-24",
+    age >= 25 & age < 35 ~ "25-34",
+    age >= 35 & age < 45 ~ "35-44",
+    age >= 45 & age < 55 ~ "45-54",
+    age >= 55 & age < 65 ~ "55-64",
+    age >= 65 & age < 75 ~ "65-74",
+    TRUE ~ "75+"),
+    gender = if_else(gender == 2,"Female","Male"),
+    over_30 = if_else(age >= 30, 1,0),
+    over_20 = if_else(age >= 20, 1,0),
+    mmetHr_travel = mmetHr_cycle+mmetHr_walk,
+    imd = case_when(imd10 %in% c(1,2) ~ "1 - Most Deprived", # most deprived 
+                    imd10 %in% c(3,4) ~ "2",
+                    imd10 %in% c(5,6) ~ "3",
+                    imd10 %in% c(7,8) ~ "4",
+                    imd10 %in% c(9,10) ~ "5 - Least Deprived")) # least deprived
+
+rm(sp, synpop, raw_hse)
+
+# Remove 23 individuals with no assigned imds to prepare the dataset for matching
+sp_health <- sp_health %>%
+  filter(!is.na(imd))
+
+
+```
+
+```{r matching, include = FALSE}
+
+
+# Method 1: Matching Sports Only
+
+sports_pool <- hse %>%
+  group_by(age_group, gender, imd) %>%
+  summarise(
+    mmetHr_sports = list(mmetHr_sports),
+    .groups = "drop")
+
+# Method 2: Matching Sports + Manual 
+
+sports_manual_pool <- hse %>%
+  group_by(age_group, gender, imd) %>%
+  summarise(
+    mmetHr_sport_manual = list(mmetHr_sport_manual),
+    .groups = "drop")
+
+# Method 3: Matching Sports + Manual + Home 
+
+sports_manual_home_pool <- hse %>%
+  group_by(age_group, gender, imd) %>%
+  summarise(
+    mmetHr_sport_manual_home = list(mmetHr_sport_manual_home),
+    .groups = "drop")
+
+# Matching 
+
+sp_health_matched <- sp_health %>%
+  left_join(sports_pool, by = c("age_group", "gender", "imd")) %>%
+  rowwise() %>%
+  mutate(
+    mmetHr_sports = sample(mmetHr_sports, 1)) %>%
+  ungroup() %>% 
+  left_join(sports_manual_pool, by = c("age_group", "gender", "imd")) %>%
+  rowwise() %>%
+  mutate(
+    mmetHr_sport_manual = sample(mmetHr_sport_manual, 1)) %>%
+  ungroup() %>% 
+  left_join(sports_manual_home_pool, by = c("age_group", "gender", "imd")) %>%
+  rowwise() %>%
+  mutate(
+    mmetHr_sport_manual_home = sample(mmetHr_sport_manual_home, 1)) %>%
+  ungroup()
+
+```
+
+```{r functions, include = FALSE}
+
+summarise_activity <- function(data, var_name, source_label, group_var = NULL) {
+  data %>%
+    dplyr::group_by(dplyr::across(dplyr::all_of(group_var))) %>%
+    dplyr::summarise(
+      mean     = mean(.data[[var_name]], na.rm = TRUE),
+      `12.5th` = quantile(.data[[var_name]], 0.125, na.rm = TRUE),
+      `25th`   = quantile(.data[[var_name]], 0.25,  na.rm = TRUE),
+      `37.5th` = quantile(.data[[var_name]], 0.375, na.rm = TRUE),
+      `50th`   = quantile(.data[[var_name]], 0.5,   na.rm = TRUE),
+      `75th`   = quantile(.data[[var_name]], 0.75,  na.rm = TRUE),
+      Value   = source_label,
+      .groups  = "drop"
+    )
+}
+
+combine_activities <- function(data, vars, labels, group_var = NULL, 
+                               digits = 2) {
+  results <- purrr::map2(vars, labels, ~ summarise_activity(data, .x, .y, group_var))
+  
+  dplyr::bind_rows(results) %>%
+    dplyr::mutate(
+      dplyr::across(dplyr::where(is.numeric), ~ round(.x, digits))
+    ) %>%
+    dplyr::select(Value, everything())
+}
+
+
+```
+
+
+```{r hse and matching, include = TRUE}
+
+# Table 1: HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by Age and Gender
+
+sp_health_matched <- sp_health_matched %>% 
+  mutate(mmetHr_totalpa = mmetHr_otherSport+mmetHr_travel,
+         mmetHr_totalpa_sports = mmetHr_sports+mmetHr_travel,
+         mmetHr_totalpa_sports_manual = mmetHr_sport_manual+mmetHr_travel,
+         mmetHr_totalpa_sports_manual_home = mmetHr_sport_manual_home+mmetHr_travel)
+
+jibe_summary_age_gender <- combine_activities(
+  data      = sp_health_matched,
+  vars      = c("mmetHr_totalpa", "mmetHr_totalpa_sports", "mmetHr_totalpa_sports_manual", "mmetHr_totalpa_sports_manual_home"),
+  labels    = c("JIBE Non-Travel + JIBE AT", "HSE Sports + JIBE AT", "HSE Sports + HSE Manual + JIBE AT", "HSE Sports + HSE Manual + HSE Home + JIBE AT"),
+  group_var = c("gender", "age_group"),
+  digits    = 2
+)
+
+hse_summary_age_gender <- combine_activities(
+  data      = hse,
+  vars      = c("mmetHr_totalpa_derived"),
+  labels    = c("HSE Total PA Bottom-Up"),
+  group_var = c("gender", "age_group"),
+  digits    = 2
+)
+
+
+# by Age and Gender
+gender_age_summary <- dplyr::bind_rows(hse_summary_age_gender, jibe_summary_age_gender) %>%
+  dplyr::arrange(gender, age_group, Value)
+
+gender_age_summary %>%
+  dplyr::select(-gender, -age_group) %>%
+  knitr::kable(caption = "HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by Age and Gender") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                            full_width = FALSE) %>%
+  kableExtra::pack_rows(index = table(paste(gender_age_summary$gender,
+                                            gender_age_summary$age_group, sep = " | ")))
+
+# Summary by gender only
+gender_summary <- dplyr::bind_rows(jibe_summary, hse_summary) %>%
+  dplyr::group_by(gender, Value) %>%
+  dplyr::summarise(dplyr::across(where(is.numeric), ~ round(mean(.x), 2)), .groups = "drop") %>%
+  dplyr::arrange(gender, Value)
+
+gender_summary %>%
+  dplyr::select(-gender) %>%
+  knitr::kable(caption = "HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by Age and Gender") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                            full_width = FALSE) %>%
+  kableExtra::pack_rows(index = table(gender_summary$gender))
+
+# Table 2: HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by IMD
+
+jibe_summary_imd <- combine_activities(
+  data      = sp_health_matched,
+  vars      = c("mmetHr_totalpa", "mmetHr_totalpa_sports", "mmetHr_totalpa_sports_manual", "mmetHr_totalpa_sports_manual_home"),
+  labels    = c("JIBE Non-Travel + JIBE AT", "HSE Sports + JIBE AT", "HSE Sports + HSE Manual + JIBE AT", "HSE Sports + HSE Manual + HSE Home + JIBE AT"),
+  group_var = c("imd"),
+  digits    = 2
+)
+
+hse_summary_imd <- combine_activities(
+  data      = hse,
+  vars      = c("mmetHr_totalpa_derived"),
+  labels    = c("HSE Total PA Bottom-Up"),
+  group_var = c("imd"),
+  digits    = 2
+)
+
+imd_summary <- dplyr::bind_rows(jibe_summary_imd, hse_summary_imd) %>%
+  dplyr::group_by(imd, Value) %>%
+  dplyr::summarise(dplyr::across(where(is.numeric), ~ round(mean(.x), 2)), .groups = "drop") %>%
+  dplyr::arrange(imd, Value)
+
+imd_summary %>%
+  dplyr::select(-imd) %>%
+  knitr::kable(caption = "HSE Total PA (Bottom-up) vs. JIBE Total PA with Matching Methods by IMD") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                            full_width = FALSE) %>%
+  kableExtra::pack_rows(index = table(imd_summary$imd))
+
+```
+
+
+``` {r active travel only, include = TRUE}
+
+# Table 3: HSE Active Travel vs JIBE Active Travel by Gender
+
+jibe_at_age_gender <- combine_activities(
+  data      = sp_health_matched,
+  vars      = c("mmetHr_cycle", "mmetHr_walk"),
+  labels    = c("JIBE Cycling", "JIBE Walking"),
+  group_var = c("gender", "age_group"),
+  digits    = 2
+)
+
+
+hse_at_age_gender <- combine_activities(
+  data      = hse,
+  vars      = c("mmetHr_cycling", "mmetHr_walk"),
+  labels    = c("HSE Cycling", "HSE Walking"),
+  group_var = c("gender", "age_group"),
+  digits    = 2
+)
+
+at_gender_summary <- dplyr::bind_rows(hse_at_age_gender, jibe_at_age_gender) %>%
+  dplyr::group_by(gender, Value) %>%
+  dplyr::summarise(dplyr::across(where(is.numeric), ~ round(mean(.x), 2)), .groups = "drop") %>%
+  dplyr::arrange(gender, Value)
+
+at_gender_summary %>%
+  dplyr::select(-gender) %>%
+  knitr::kable(caption = "HSE Active Travel vs JIBE Active Travel by Gender") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                            full_width = FALSE) %>%
+  kableExtra::pack_rows(index = table(at_gender_summary$gender))
+
+# Table 4:  HSE Active Travel vs JIBE Active Travel by IMD
+
+jibe_at_imd <- combine_activities(
+  data      = sp_health_matched,
+  vars      = c("mmetHr_cycle", "mmetHr_walk"),
+  labels    = c("JIBE Cycling", "JIBE Walking"),
+  group_var = c("imd"),
+  digits    = 2
+)
+
+
+hse_at_imd <- combine_activities(
+  data      = hse,
+  vars      = c("mmetHr_cycling", "mmetHr_walk"),
+  labels    = c("HSE Cycling", "HSE Walking"),
+  group_var = c("imd"),
+  digits    = 2
+)
+
+
+at_imd_summary <- dplyr::bind_rows(hse_at_imd, jibe_at_imd) %>%
+  dplyr::group_by(imd, Value) %>%
+  dplyr::summarise(dplyr::across(where(is.numeric), ~ round(mean(.x), 2)), .groups = "drop") %>%
+  dplyr::arrange(imd, Value)
+
+at_imd_summary %>%
+  dplyr::select(-imd) %>%
+  knitr::kable(caption = "HSE Active Travel vs JIBE Active Travel by IMD") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                            full_width = FALSE) %>%
+  kableExtra::pack_rows(index = table(at_imd_summary$imd))
+
+
+```
+
+```{r meta analysis, include = TRUE}
+
+# Table 5: HSE Sports + Home + Manual + JIBE AT vs HSE Total PA vs Meta Analysis by Gender
+
+meta_data <- data.frame(
+  gender = c("Male", "Female"),
+  `Min` = c(0, 0),
+  `1st Qu.` = c(2.73, 2.61),
+  `Median` = c(10.66, 10.66),
+  `Mean` = c(18.698, 17.352),
+  `3rd Qu.` = c(23.87, 22.82),
+  `Max` = c(156.45, 103.6),
+  Source = "Meta-Analysis",
+  check.names = FALSE)
+
+summary_hse_totalpa <- hse %>% 
+  group_by(gender) %>%
+  summarise(
+    `Min` = min(mmetHr_totalpa_derived),
+    `1st Qu.` = quantile(mmetHr_totalpa_derived, 0.25),
+    `Mean` = mean(mmetHr_totalpa_derived),
+    `Median` = median(mmetHr_totalpa_derived),
+    `3rd Qu.` = quantile(mmetHr_totalpa_derived, 0.75),
+    `Max` = max(mmetHr_totalpa_derived),
+    Source = "HSE Total PA Bottom Up")
+
+summary_jibe_sports_manual_home <- sp_health_matched %>% 
+  group_by(gender) %>%
+  summarise(
+    `Min` = min(mmetHr_totalpa_sports_manual_home),
+    `1st Qu.` = quantile(mmetHr_totalpa_sports_manual_home, 0.25),
+    `Mean` = mean(mmetHr_totalpa_sports_manual_home),
+    `Median` = median(mmetHr_totalpa_sports_manual_home),
+    `3rd Qu.` = quantile(mmetHr_totalpa_sports_manual_home, 0.75),
+    `Max` = max(mmetHr_totalpa_sports_manual_home),
+    Source = "HSE Sports + HSE Manual + HSE Home + JIBE AT")
+
+summary <- rbind(meta_data, summary_hse_totalpa, summary_jibe_sports_manual_home) %>% 
+  mutate(across(where(is.numeric), round, 2)) %>%
+  dplyr::group_by(gender, Source) %>%
+  dplyr::summarise(dplyr::across(where(is.numeric), ~ round(mean(.x), 2)), .groups = "drop") %>%
+  dplyr::arrange(gender, Source)
+
+summary %>%
+  dplyr::select(-gender) %>%
+  knitr::kable(caption = "HSE Sports + Home + Manual + JIBE AT vs HSE Total PA vs Meta Analysis by Gender") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                            full_width = FALSE) %>%
+  kableExtra::pack_rows(index = table(summary$gender))
+
+```
