@@ -1,0 +1,116 @@
+library(tidyverse)
+library(haven)
+library(ggplot2)
+
+set.seed(2026)
+
+# Add imd10 from zones dataset
+add_imd <- function(df, zones) {
+  left_join(df, 
+            zones |> 
+              dplyr::select(oaID, imd10) |> 
+              distinct())
+}
+
+# Read zones that contain IMD10
+ZONES_CSV  <- "/media/ali/Expansion/backup_tabea/manchester-main/input/zoneSystem.csv"
+zones    <- readr::read_csv(ZONES_CSV, show_col_types = FALSE)
+
+synth_data <- read_csv("/media/ali/Expansion/backup_tabea/Ali/manchester/scenOutput/base/microData/pp_exposure_2021.csv")
+
+# Rename var
+synth_data <- synth_data |> rename(oaID = zone)
+
+# Add imd10 to each OA
+synth_data <- add_imd(synth_data, zones)
+
+# Recategorise imd10 to imd with 5 categories
+# Calculate travel PA
+# Recategorise numeric gender to string
+synth_data <- synth_data |> mutate(imd = (imd10 + 1) %/% 2,
+                                   travel_PA = mmetHr_cycle + mmetHr_walk,
+                                   gender = if_else(gender == 2, "Female", "Male"))
+
+# Assign age groups
+assign_age_group <- function(age) {
+  if (is.na(age)) return(NA)
+  else if (age >= 16 & age <= 24) return("16-24")
+  else if (age >= 25 & age <= 34) return("25-34")
+  else if (age >= 35 & age <= 44) return("35-44")
+  else if (age >= 45 & age <= 54) return("45-54")
+  else if (age >= 55 & age <= 64) return("55-64")
+  else if (age >= 65 & age <= 74) return("65-74")
+  else if (age >= 75) return("75+")
+  else return(NA) # for ages < 16 or missing
+}
+
+# Create age groups
+synth_data$age_group <- sapply(synth_data$age, assign_age_group)
+
+MA <- read_csv("data/MA_acm.csv") |> 
+  rename(gender = population) |> 
+  mutate(gender = if_else(gender == "Men", "Male", "Female"))
+
+# Based on age_group, gender and imd levels, sample from df_B to df_A
+assign_sports_PA <- function(df_A, df_B) {
+  df_A <- df_A |>
+    group_by(age_group, gender, imd) |>
+    mutate(
+      mmetHr_sport_manual = {
+        # Extract group keys as local variables first
+        #current_age_group <- unique(age_group)
+        current_gender    <- unique(gender)
+        #current_imd       <- unique(imd)
+        
+        matches <- df_B |>
+          filter(#age_group == current_age_group,
+                 gender    == current_gender#,
+                 #imd       == current_imd
+                 ) |>
+          pull(dose)
+        
+        if (length(matches) == 0) {
+          warning(paste("No match found for stratum:",
+                        current_age_group, current_gender, current_imd,
+                        "- using global B distribution"))
+          sample(df_B$dose, n(), replace = TRUE)
+        } else {
+          sample(matches, n(), replace = TRUE)
+        }
+      },
+      background_PA = pmax(mmetHr_sport_manual - travel_PA, 0),
+      total_PA = background_PA + travel_PA
+    ) |>
+    ungroup()
+  
+  return(df_A)
+}
+
+
+# Call functions
+synth_data1 <- assign_sports_PA(synth_data, MA)
+
+# Combine for comparison
+compare_df <- bind_rows(
+  MA |> rename(total_PA = dose) |> select(total_PA, gender) |> mutate(source = "MA"),
+  synth_data1 |> filter(!is.na(age_group)) |> select(total_PA, gender) |> mutate(source = "JIBE")
+)
+
+# Density plot
+ggplot(compare_df, aes(x = total_PA, fill = source)) +
+  geom_density(alpha = 0.4) +
+  labs(title = "Distribution of total_PA: Synthetic Population (imputed) vs MA",
+       x = "total_PA", y = "Density") +
+  theme_minimal()
+
+# Summary statistics
+compare_df |>
+  group_by(gender, source) |>
+  summarise(
+    mean   = mean(total_PA, na.rm = TRUE),
+    `12.5th` = quantile(total_PA, 0.125),
+    `25th.` = quantile(total_PA, 0.25),
+    `37.5th.` = quantile(total_PA, 0.375),
+    `50th` = quantile(total_PA, 0.5),
+    `75th.` = quantile(total_PA, 0.75)
+  ) |> View()
