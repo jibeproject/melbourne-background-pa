@@ -558,7 +558,7 @@ display: none;
 
 
 
-<script type="text/javascript" src="./Physical Activity Matching_ Proposed Approach of Increasing MET Values_files/MathJax.js.download"></script><style type="text/css">.MathJax_Hover_Frame {border-radius: .25em; -webkit-border-radius: .25em; -moz-border-radius: .25em; -khtml-border-radius: .25em; box-shadow: 0px 0px 15px #83A; -webkit-box-shadow: 0px 0px 15px #83A; -moz-box-shadow: 0px 0px 15px #83A; -khtml-box-shadow: 0px 0px 15px #83A; border: 1px solid #A6D ! important; display: inline-block; position: absolute}
+<script type="text/javascript" src="./pa_matching_proposal_files/MathJax.js.download"></script><style type="text/css">.MathJax_Hover_Frame {border-radius: .25em; -webkit-border-radius: .25em; -moz-border-radius: .25em; -khtml-border-radius: .25em; box-shadow: 0px 0px 15px #83A; -webkit-box-shadow: 0px 0px 15px #83A; -moz-box-shadow: 0px 0px 15px #83A; -khtml-box-shadow: 0px 0px 15px #83A; border: 1px solid #A6D ! important; display: inline-block; position: absolute}
 .MathJax_Menu_Button .MathJax_Hover_Arrow {position: absolute; cursor: pointer; display: inline-block; border: 2px solid #AAA; border-radius: 4px; -webkit-border-radius: 4px; -moz-border-radius: 4px; -khtml-border-radius: 4px; font-family: 'Courier New',Courier; font-size: 9px; color: #F0F0F0}
 .MathJax_Menu_Button .MathJax_Hover_Arrow span {display: block; background-color: #AAA; border: 1px solid; border-radius: 3px; line-height: 0; padding: 4px}
 .MathJax_Hover_Arrow:hover {color: white!important; border: 2px solid #CCC!important}
@@ -686,19 +686,31 @@ and quantile values are closer to the MA (see Table 1). As per the age
 and gender breakdown, matching by all components of the HSE’s Total PA
 excluding the active travel, which comes from JIBE and is kept constant
 in this analysis, yields the closest match to the HSE’s Total PA (using
-bottom-up calculation approach) across the entire distribution for
-females (e.g., medians of 11.97 vs.&nbsp;HSE’s 11.85 for Females 16-24, see
-Table 2) albeit slightly underestimating for under 55 and overestimating
-for women older than 55. For men, the underestimation is larger for
-those under 55 (median 20.84 vs HSE’s 26.14 for males aged 16-24; 12.34
-vs HSE’s 18.22 for ages 35-44). For men 55 and older, the estimates of
-total PA are overestimated. Per IMD, the estimates appear overestimated
-for most deprived regions (median 6.37 vs HSE’s 4.35) and underestimated
-for the least deprived regions (median 8.4 vs HSE’s 12).</p>
+bottom-up calculation approach) for females (e.g., medians of 11.97
+vs.&nbsp;HSE’s 11.85 for Females 16-24, see Table 2) albeit slightly
+underestimating for under 55 and overestimating for women older than 55.
+For men, the underestimation is larger for those under 55 (median 20.84
+vs HSE’s 26.14 for males aged 16-24; 12.34 vs HSE’s 18.22 for ages
+35-44). For men 55 and older, the estimates of total PA are
+overestimated. The estimates continue to be overestimates at lower
+percentiles for both males and females. Per IMD, the estimates appear
+overestimated for most deprived regions (median 6.37 vs HSE’s 4.35) and
+underestimated for the least deprived regions (median 8.4 vs HSE’s
+12).</p>
+<p>Table 1 serves to compare the Meta Analysis results vs.&nbsp;the estimates
+of the proposed matching process “HSE Sports + HSE Manual + HSE Home +
+JIBE AT” by gender.</p>
+<p>Table 2 provides a granular breakdown and comparison of all matching
+approaches tried so far by age groups and gender. The currently proposed
+approach is “HSE Sports + HSE Manual + HSE Home + JIBE AT” is compared
+to HSE Total PA (using an average met value of 5) and the currently
+implemented approach in Java (“JIBE Non-Travel + JIBE AT”), which was
+calculated using stratified random sampling and the following formula:
+JIBE Non-Travel = Matched Total PA - JIBE AT.</p>
 <table class="table table-striped table-hover table-condensed" style="color: black; width: auto !important; margin-left: auto; margin-right: auto;">
 <caption>
-Table 1: HSE Sports + Home + Manual + JIBE AT vs HSE Total PA vs Meta
-Analysis by Gender
+Table 1: HSE Sports + Home + Manual + JIBE AT vs HSE Total PA Components
+vs Meta Analysis by Gender
 </caption>
 <thead>
 <tr>
