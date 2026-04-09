@@ -107,31 +107,31 @@ assign_sports_PA <- function(df_A, df_B) {
 # Call functions
 synth_data1 <- assign_sports_PA(synth_data, hse)
 
-synth_data1 <- synth_data1 |> mutate(total_PA = travel_PA + mmetHr_otherSport)
+synth_data1 <- synth_data1 |> mutate(total_PA = travel_PA + nonTransportPA)
 
 # Combine for comparison
 compare_df <- bind_rows(
   #hse |> select(mmetHr_sport_manual, gender, imd, age_group) |> mutate(source = "HSE (sports + manual)"),
-  synth_data |> select(total_PA, gender, imd, age_group) |> mutate(source = "JIBE")
+  synth_data1 |> select(total_PA, gender, imd, age_group) |> mutate(source = "JIBE")
 )
 
 # Density plot
-ggplot(compare_df, aes(x = mmetHr_sport_manual, fill = source)) +
+ggplot(compare_df, aes(x = total_PA, fill = source)) +
   geom_density(alpha = 0.4) +
-  labs(title = "Distribution of mmetHr_sport_manual: Synthetic Population (imputed) vs HSE (original)",
-       x = "mmetHr_sport_manual", y = "Density") +
+  labs(title = "Distribution of total_PA: Synthetic Population (imputed) vs HSE (original)",
+       x = "total_PA", y = "Density") +
   theme_minimal()
 
 # Summary statistics
 compare_df |>
-  group_by(age_group, gender, imd, source) |>
+  group_by(gender, source) |>
   summarise(
-    mean   = mean(mmetHr_sport_manual, na.rm = TRUE),
-    `12.5th` = quantile(mmetHr_sport_manual, 0.125),
-    `25th.` = quantile(mmetHr_sport_manual, 0.25),
-    `37.5th.` = quantile(mmetHr_sport_manual, 0.375),
-    `50th` = quantile(mmetHr_sport_manual, 0.5),
-    `75th.` = quantile(mmetHr_sport_manual, 0.75)
+    mean   = mean(total_PA, na.rm = TRUE),
+    `12.5th` = quantile(total_PA, 0.125),
+    `25th.` = quantile(total_PA, 0.25),
+    `37.5th.` = quantile(total_PA, 0.375),
+    `50th` = quantile(total_PA, 0.5),
+    `75th.` = quantile(total_PA, 0.75)
   ) |> View()
 
 # Combine for comparison
