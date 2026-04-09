@@ -68,14 +68,15 @@ synth_data$age_group <- sapply(synth_data$age, assign_age_group)
 #           med_travel_pa = median(travel_PA), 
 #           med_sports_pa = med_total_pa - med_travel_pa)
 
-hse <- read_csv("data/processed_hse.csv")
+#hse <- read_csv("data/processed_hse.csv")
+hse <- read_csv("/media/ali/Expansion/backup_tabea/Ali/manchester/input/health/HSE/processed_hse.csv")
 
 # Based on age_group, gender and imd levels, sample from df_B to df_A
 assign_sports_PA <- function(df_A, df_B) {
   df_A <- df_A |>
     group_by(age_group, gender, imd) |>
     mutate(
-      mmetHr_sport_manual = {
+      nonTransportPA = {
         # Extract group keys as local variables first
         current_age_group <- unique(age_group)
         current_gender    <- unique(gender)
@@ -85,13 +86,13 @@ assign_sports_PA <- function(df_A, df_B) {
           filter(age_group == current_age_group,
                  gender    == current_gender,
                  imd       == current_imd) |>
-          pull(mmetHr_sport_manual)
+          pull(nonTransportPA)
         
         if (length(matches) == 0) {
           warning(paste("No match found for stratum:",
                         current_age_group, current_gender, current_imd,
                         "- using global B distribution"))
-          sample(df_B$mmetHr_sport_manual, n(), replace = TRUE)
+          sample(df_B$nonTransportPA, n(), replace = TRUE)
         } else {
           sample(matches, n(), replace = TRUE)
         }
@@ -104,12 +105,14 @@ assign_sports_PA <- function(df_A, df_B) {
 
 
 # Call functions
-synth_data <- assign_sports_PA(synth_data, hse)
+synth_data1 <- assign_sports_PA(synth_data, hse)
+
+synth_data1 <- synth_data1 |> mutate(total_PA = travel_PA + mmetHr_otherSport)
 
 # Combine for comparison
 compare_df <- bind_rows(
-  hse |> select(mmetHr_sport_manual, gender, imd, age_group) |> mutate(source = "HSE (sports + manual)"),
-  synth_data |> select(mmetHr_sport_manual, gender, imd, age_group) |> mutate(source = "JIBE (sports + manual)")
+  #hse |> select(mmetHr_sport_manual, gender, imd, age_group) |> mutate(source = "HSE (sports + manual)"),
+  synth_data |> select(total_PA, gender, imd, age_group) |> mutate(source = "JIBE")
 )
 
 # Density plot
