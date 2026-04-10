@@ -59,6 +59,8 @@ assign_age_group <- function(age) {
 # Create age groups
 synth_data$age_group <- sapply(synth_data$age, assign_age_group)
 
+#write_csv(synth_data, "data/synth_data.csv")
+
 # synth_data |> 
 #   filter(age_group == "16-24", gender == "Female", imd == 1) |> 
 #   mutate(traval_PA = mmetHr_walk + mmetHr_cycle, 
@@ -92,7 +94,7 @@ assign_sports_PA <- function(df_A, df_B) {
           warning(paste("No match found for stratum:",
                         current_age_group, current_gender, current_imd,
                         "- using global B distribution"))
-          sample(df_B$nonTransportPA, n(), replace = TRUE)
+          0#sample(df_B$nonTransportPA, n(), replace = TRUE)
         } else {
           sample(matches, n(), replace = TRUE)
         }
@@ -105,25 +107,26 @@ assign_sports_PA <- function(df_A, df_B) {
 
 
 # Call functions
-synth_data1 <- assign_sports_PA(synth_data, hse)
-
-synth_data1 <- synth_data1 |> mutate(total_PA = travel_PA + nonTransportPA)
+synth_data2 <- assign_sports_PA(synth_data, hse)
+synth_data2 <- synth_data2 |> mutate(total_PA = travel_PA + nonTransportPA)
+synth_data1 <- synth_data |> mutate(total_PA = travel_PA + mmetHr_otherSport)
 
 # Combine for comparison
 compare_df <- bind_rows(
   #hse |> select(mmetHr_sport_manual, gender, imd, age_group) |> mutate(source = "HSE (sports + manual)"),
-  synth_data1 |> select(total_PA, gender, imd, age_group) |> mutate(source = "JIBE")
+  synth_data1 |> select(total_PA, gender, imd, age_group) |> mutate(source = "JIBE (Java)"),
+  synth_data2 |> select(total_PA, gender, imd, age_group) |> mutate(source = "JIBE (R)")
 )
 
 # Density plot
 ggplot(compare_df, aes(x = total_PA, fill = source)) +
   geom_density(alpha = 0.4) +
-  labs(title = "Distribution of total_PA: Synthetic Population (imputed) vs HSE (original)",
+  labs(title = "Distribution of total_PA: Synthetic Population (Java) vs Synthetic Population (R)",
        x = "total_PA", y = "Density") +
   theme_minimal()
 
 # Summary statistics
-compare_df |>
+compare_df |> filter(!is.na(age_group)) |> 
   group_by(gender, source) |>
   summarise(
     mean   = mean(total_PA, na.rm = TRUE),
@@ -132,24 +135,4 @@ compare_df |>
     `37.5th.` = quantile(total_PA, 0.375),
     `50th` = quantile(total_PA, 0.5),
     `75th.` = quantile(total_PA, 0.75)
-  ) |> View()
-
-# Combine for comparison
-synth_df_summary <- bind_rows(
-  synth_data |> 
-    mutate(total_pa = travel_PA + mmetHr_sport_manual) |> 
-    select(total_pa, gender, imd, age_group) |> 
-    mutate(source = "JIBE Total PA (travel + sports + manual)")
-)
-
-# Summary statistics
-synth_df_summary |>
-  group_by(age_group, gender, imd, source) |>
-  summarise(
-    mean   = mean(total_pa, na.rm = TRUE),
-    `12.5th` = quantile(total_pa, 0.125),
-    `25th.` = quantile(total_pa, 0.25),
-    `37.5th.` = quantile(total_pa, 0.375),
-    `50th` = quantile(total_pa, 0.5),
-    `75th.` = quantile(total_pa, 0.75)
-  ) |> View()
+  )
