@@ -51,6 +51,8 @@ MA <- read_csv("data/MA_acm.csv") |>
   rename(gender = population) |> 
   mutate(gender = if_else(gender == "Men", "Male", "Female"))
 
+HSE <- read_csv("/media/ali/Expansion/backup_tabea/Ali/manchester/input/health/HSE/processed_hse.csv")
+
 # Based on age_group, gender and imd levels, sample from df_B to df_A
 assign_sports_PA <- function(df_A, df_B) {
   df_A <- df_A |>
@@ -88,12 +90,13 @@ assign_sports_PA <- function(df_A, df_B) {
 
 
 # Call functions
-synth_data1 <- assign_sports_PA(synth_data, MA)
+#synth_data1 <- assign_sports_PA(synth_data, MA)
+synth_data1 <- synth_data |> mutate(total_PA = travel_PA + mmetHr_otherSport)
 
 # Combine for comparison
 compare_df <- bind_rows(
   MA |> rename(total_PA = dose) |> select(total_PA, gender) |> mutate(source = "MA"),
-  synth_data1 |> filter(!is.na(age_group)) |> select(total_PA, gender) |> mutate(source = "JIBE")
+  synth_data1 |> filter(!is.na(age_group)) |> select(total_PA, gender, age_group, imd) |> mutate(source = "JIBE")
 )
 
 # Density plot
@@ -105,7 +108,7 @@ ggplot(compare_df, aes(x = total_PA, fill = source)) +
 
 # Summary statistics
 compare_df |>
-  group_by(gender, source) |>
+  group_by(age_group, imd, gender, source) |>
   summarise(
     mean   = mean(total_PA, na.rm = TRUE),
     `12.5th` = quantile(total_PA, 0.125),
